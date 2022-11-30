@@ -67,9 +67,3 @@ impl <T> sp_std::fmt::Display for Kitty<T> where T: Config {
         write!(f, "(dna: {:?}, price: {:?}, gender: {:?}, owner: {:?}", self.dna, self.price, self.gender, self.owner)
     }
 }
-
-// impl <T> Display for Kitty<T> where T: Config {
-//     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-//         write!(f, "(dna: {:?}, price: {:?}, gender: {:?}, owner: {:?}", self.dna, self.price, self.gender, self.owner)
-//     }
-// }

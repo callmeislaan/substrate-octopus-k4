@@ -7,9 +7,10 @@ pub mod types;
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{pallet_prelude::{*, ValueQuery, DispatchResult}, traits::{Randomness, Currency}, ensure};
+	use frame_support::sp_runtime::traits::Hash;
 	use frame_system::{pallet_prelude::{*, OriginFor}, ensure_signed};
 	use frame_support::inherent::Vec;
-	use sp_io::hashing::blake2_128;
+use sp_io::hashing::blake2_128;
 
 	use crate::types::*;
 
@@ -32,6 +33,8 @@ pub mod pallet {
 
 		type Currency: Currency<Self::AccountId>;
 
+		type MaxOwnerKitty: Get<u32>;
+
 	}
 
 	#[pallet::storage]
@@ -40,18 +43,18 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn kitties)]
-	pub type Kitties<T: Config> = StorageMap<_, Blake2_128Concat, Vec<u8>, Kitty<T>, OptionQuery, >;
+	pub type Kitties<T: Config> = StorageMap<_, Blake2_128Concat, T::Hash, Kitty<T>, OptionQuery, >;
 
 	#[pallet::storage]
 	#[pallet::getter(fn kitty_owner)]
-	pub type KittyOwner<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, Vec<Vec<u8>>, ValueQuery, >;
+	pub type KittyOwner<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, BoundedVec<T::Hash, T::MaxOwnerKitty>, ValueQuery, >;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		KittyCreated(AccountOf<T>, Vec<u8>),
-		KittyTranfered(Vec<u32>, AccountOf<T>),
-		PriceSet(Vec<u8>, Option<BalanceOf<T>>),
+		KittyCreated(AccountOf<T>, T::Hash),
+		KittyTranfered(T::Hash, AccountOf<T>),
+		PriceSet(T::Hash, Option<BalanceOf<T>>),
 	}
 
 	#[pallet::error]
@@ -61,6 +64,7 @@ pub mod pallet {
 		NotKittyOwner,
 		TransferToSelf,
 		KittyHasNoPrice,
+		MaxOwnerKitty,
 	}
 
 	#[pallet::call]
@@ -76,44 +80,45 @@ pub mod pallet {
 
 			<KittyCounter<T>>::put(current_kitty_count + 1);
 
-			<Kitties<T>>::insert(kitty.dna(), kitty.clone());
+			let kitty_id = T::Hashing::hash_of(&kitty);
 
+			<Kitties<T>>::insert(kitty_id.clone(), kitty.clone());
 
 			let mut kitty_owner = Self::kitty_owner(&who);
 
-			kitty_owner.push(kitty.dna());
+			kitty_owner.try_push(kitty_id.clone()).map_err(|_| <Error<T>>::MaxOwnerKitty)?;
 
 			<KittyOwner<T>>::insert(who.clone(), kitty_owner.clone());
 			
 
-			Self::deposit_event(Event::KittyCreated(who, kitty.dna()));
+			Self::deposit_event(Event::KittyCreated(who, kitty_id));
 
 			Ok(())
 		}
 		
 		#[pallet::weight(10_000)]
-		pub fn set_price(origin: OriginFor<T>, dna: Vec<u8>, price: Option<BalanceOf<T>>) -> DispatchResult {
+		pub fn set_price(origin: OriginFor<T>, kitty_id: T::Hash, price: Option<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			
-			ensure!(Self::is_kitty_owner(&dna, &who)?, <Error<T>>::NotKittyOwner);
+			ensure!(Self::is_kitty_owner(&kitty_id, &who)?, <Error<T>>::NotKittyOwner);
 
-			let mut kitty = Self::kitties(&dna).ok_or(<Error<T>>::NotKittyOwner)?;
+			let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
 
 			kitty.set_price(price);
 
-			<Kitties<T>>::insert(dna.clone(), kitty);
+			<Kitties<T>>::insert(kitty_id.clone(), kitty);
 
-			Self::deposit_event(<Event<T>>::PriceSet(dna, price));
+			Self::deposit_event(<Event<T>>::PriceSet(kitty_id, price));
 
 
 			Ok(())
 		}
 
 		#[pallet::weight(10_000)]
-		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, dna: Vec<u8>) -> DispatchResult {
+		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, kitty_id: T::Hash) -> DispatchResult {
 			let from = ensure_signed(origin)?;
 
-			Self::transfer_to(dna, &from, &to)?;
+			Self::transfer_to(kitty_id, &from, &to)?;
 
 			Ok(())
 		}
@@ -148,23 +153,23 @@ pub mod pallet {
 			<Kitty<T>>::new(who, dna, gender)
 		}
 
-		fn is_kitty_owner(dna: &Vec<u8>, owner: &T::AccountId) -> Result<bool, Error<T>> {
-			match Self::kitties(dna) {
+		fn is_kitty_owner(kitty_id: &T::Hash, owner: &T::AccountId) -> Result<bool, Error<T>> {
+			match Self::kitties(kitty_id) {
 				Some(kitty) => Ok(kitty.owner() == *owner),
 				None => Err(Error::KittyNotExist),
 			}
 		}
 
-		fn transfer_to(dna: Vec<u8>, from: &T::AccountId, to: &T::AccountId) -> Result<(), Error<T>> { 
+		fn transfer_to(kitty_id: T::Hash, from: &T::AccountId, to: &T::AccountId) -> Result<(), Error<T>> { 
 			// ensure the kitty owner
-			ensure!(Self::is_kitty_owner(&dna, from)?, <Error<T>>::NotKittyOwner);
+			ensure!(Self::is_kitty_owner(&kitty_id, from)?, <Error<T>>::NotKittyOwner);
 
 			// ensure not transfer to self
 			ensure!(from != to, <Error<T>>::TransferToSelf);
 
 			// remove old kitty owner
 			<KittyOwner<T>>::try_mutate(from, |kitty_vec| {
-				if let Some(position) = kitty_vec.iter().position(|x| *x == dna.clone()) {
+				if let Some(position) = kitty_vec.iter().position(|x| *x == kitty_id.clone()) {
 					kitty_vec.swap_remove(position);
 					return Ok(());
 				}
@@ -173,16 +178,15 @@ pub mod pallet {
 
 			// update kitty owner
 
-			let mut kitty = Self::kitties(&dna).ok_or(<Error<T>>::KittyNotExist)?;
+			let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
 			kitty.set_price(None);
 			kitty.set_owner(to.clone());
-			<Kitties<T>>::insert(dna.clone(), kitty);
+			<Kitties<T>>::insert(kitty_id.clone(), kitty);
 
 			// add new kitty owner s
 			<KittyOwner<T>>::try_mutate(&to, |kitty_vec| {
-				kitty_vec.push(dna);
-				Ok(())
-			}).map_err(|_: Result<(), Error<T>>| <Error<T>>::KittyNotExist)?;
+				kitty_vec.try_push(kitty_id)
+			}).map_err(|_| <Error<T>>::KittyNotExist)?;
 
 			Ok(())
 
