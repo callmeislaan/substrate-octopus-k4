@@ -6,7 +6,7 @@ pub mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{pallet_prelude::{*, ValueQuery, DispatchResult}, traits::Randomness, ensure};
+	use frame_support::{pallet_prelude::{*, ValueQuery, DispatchResult}, traits::{Randomness, Currency}, ensure};
 	use frame_system::{pallet_prelude::{*, OriginFor}, ensure_signed};
 	use frame_support::inherent::Vec;
 	use sp_io::hashing::blake2_128;
@@ -18,11 +18,19 @@ pub mod pallet {
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
+
+	pub(super) type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+	pub(super) type AccountOf<T> = <T as frame_system::Config>::AccountId;
+
+
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		type KittyRandomness: Randomness<<Self as frame_system::Config>::Hash, <Self as frame_system::Config>::BlockNumber>;
+
+		type Currency: Currency<Self::AccountId>;
 
 	}
 
@@ -41,9 +49,9 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		KittyCreated(T::AccountId, Vec<u8>),
-		KittyTranfered(Vec<u32>, T::AccountId),
-		PriceSet(Vec<u8>, u32),
+		KittyCreated(AccountOf<T>, Vec<u8>),
+		KittyTranfered(Vec<u32>, AccountOf<T>),
+		PriceSet(Vec<u8>, Option<BalanceOf<T>>),
 	}
 
 	#[pallet::error]
@@ -52,6 +60,7 @@ pub mod pallet {
 		KittyNotExist,
 		NotKittyOwner,
 		TransferToSelf,
+		KittyHasNoPrice,
 	}
 
 	#[pallet::call]
@@ -83,10 +92,8 @@ pub mod pallet {
 		}
 		
 		#[pallet::weight(10_000)]
-		pub fn set_price(origin: OriginFor<T>, dna: Vec<u8>, price: u32) -> DispatchResult {
+		pub fn set_price(origin: OriginFor<T>, dna: Vec<u8>, price: Option<BalanceOf<T>>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
-			let input_dna = <KittyOwner<T>>::get(who.clone());
 			
 			ensure!(Self::is_kitty_owner(&dna, &who)?, <Error<T>>::NotKittyOwner);
 
@@ -106,34 +113,7 @@ pub mod pallet {
 		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, dna: Vec<u8>) -> DispatchResult {
 			let from = ensure_signed(origin)?;
 
-			// ensure the kitty owner
-			ensure!(Self::is_kitty_owner(&dna, &from)?, <Error<T>>::NotKittyOwner);
-
-			// ensure not transfer to self
-			ensure!(from != to, <Error<T>>::TransferToSelf);
-			
-			// remove old kitty owner
-			<KittyOwner<T>>::try_mutate(&from, |kitty_vec| {
-				if let Some(position) = kitty_vec.iter().position(|x| *x == dna.clone()) {
-					kitty_vec.swap_remove(position);
-					return Ok(());
-				}
-				Err(())
-			}).map_err(|_| <Error<T>>::KittyNotExist)?;
-
-			// update kitty owner
-
-			let mut kitty = Self::kitties(&dna).ok_or(<Error<T>>::KittyNotExist)?;
-			kitty.set_price(0);
-			kitty.set_owner(to.clone());
-			<Kitties<T>>::insert(dna.clone(), kitty);
-
-			// add new kitty owner s
-			<KittyOwner<T>>::try_mutate(&to, |kitty_vec| {
-				kitty_vec.push(dna);
-				Ok(())
-			}).map_err(|_: Result<(), Error<T>>| <Error<T>>::KittyNotExist)?;
-
+			Self::transfer_to(dna, &from, &to)?;
 
 			Ok(())
 		}
@@ -156,7 +136,7 @@ pub mod pallet {
 		}
 
 		fn generate_gender(dna: &Vec<u8> ) -> Gender {
-			if dna.len() % 2 == 0 {
+			if dna[0] % 2 == 0 {
 				return Gender::MALE;
 			}
 			Gender::FEMALE
@@ -173,6 +153,39 @@ pub mod pallet {
 				Some(kitty) => Ok(kitty.owner() == *owner),
 				None => Err(Error::KittyNotExist),
 			}
+		}
+
+		fn transfer_to(dna: Vec<u8>, from: &T::AccountId, to: &T::AccountId) -> Result<(), Error<T>> { 
+			// ensure the kitty owner
+			ensure!(Self::is_kitty_owner(&dna, from)?, <Error<T>>::NotKittyOwner);
+
+			// ensure not transfer to self
+			ensure!(from != to, <Error<T>>::TransferToSelf);
+
+			// remove old kitty owner
+			<KittyOwner<T>>::try_mutate(from, |kitty_vec| {
+				if let Some(position) = kitty_vec.iter().position(|x| *x == dna.clone()) {
+					kitty_vec.swap_remove(position);
+					return Ok(());
+				}
+				Err(())
+			}).map_err(|_| <Error<T>>::KittyNotExist)?;
+
+			// update kitty owner
+
+			let mut kitty = Self::kitties(&dna).ok_or(<Error<T>>::KittyNotExist)?;
+			kitty.set_price(None);
+			kitty.set_owner(to.clone());
+			<Kitties<T>>::insert(dna.clone(), kitty);
+
+			// add new kitty owner s
+			<KittyOwner<T>>::try_mutate(&to, |kitty_vec| {
+				kitty_vec.push(dna);
+				Ok(())
+			}).map_err(|_: Result<(), Error<T>>| <Error<T>>::KittyNotExist)?;
+
+			Ok(())
+
 		}
 	}
 

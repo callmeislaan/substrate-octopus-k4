@@ -4,16 +4,19 @@ use core::{clone, fmt::{Display, write}};
 
 use codec::*;
 use frame_support::{inherent::Vec, RuntimeDebug};
-use frame_system::Config;
 use scale_info::TypeInfo;
+
+use crate::Config;
+use crate::AccountOf;
+use crate::BalanceOf;
 
 
 #[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct Kitty<T: Config> {
     dna: Vec<u8>,
-    owner: T::AccountId,
-    price: u32,
+    owner: AccountOf<T>,
+    price: Option<BalanceOf<T>>,
     gender: Gender,
 }
 
@@ -29,7 +32,7 @@ impl <T: Config> Kitty<T> {
         Kitty {
             dna,
             owner: who,
-            price: 0,
+            price: None,
             gender,
         }
     }
@@ -42,7 +45,7 @@ impl <T: Config> Kitty<T> {
         self.owner.clone()
     }
 
-    pub fn price(&self) -> u32 {
+    pub fn price(&self) -> Option<BalanceOf<T>> {
         self.price
     }
 
@@ -50,7 +53,7 @@ impl <T: Config> Kitty<T> {
         self.gender.clone()
     }
 
-    pub fn set_price(&mut self, new_price: u32) {
+    pub fn set_price(&mut self, new_price: Option<BalanceOf<T>>) {
         self.price = new_price;
     }
 
