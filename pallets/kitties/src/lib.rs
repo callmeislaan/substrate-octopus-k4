@@ -6,11 +6,13 @@ pub mod types;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::{pallet_prelude::{*, ValueQuery, DispatchResult}, traits::{Randomness, Currency}, ensure};
+	use frame_support::{pallet_prelude::{
+		*, ValueQuery, DispatchResult}, 
+		traits::{Randomness, Currency}, 
+		ensure, transactional};
 	use frame_support::sp_runtime::traits::Hash;
-	use frame_system::{pallet_prelude::{*, OriginFor}, ensure_signed};
-	use frame_support::inherent::Vec;
-use sp_io::hashing::blake2_128;
+	use frame_system::{pallet_prelude::OriginFor, ensure_signed};
+	use sp_io::hashing::blake2_128;
 
 	use crate::types::*;
 
@@ -20,9 +22,9 @@ use sp_io::hashing::blake2_128;
 	pub struct Pallet<T>(_);
 
 
-	pub(super) type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+	pub(crate) type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-	pub(super) type AccountOf<T> = <T as frame_system::Config>::AccountId;
+	pub(crate) type AccountOf<T> = <T as frame_system::Config>::AccountId;
 
 
 	#[pallet::config]
@@ -60,11 +62,13 @@ use sp_io::hashing::blake2_128;
 	#[pallet::error]
 	pub enum Error<T> {
 		NoneValue,
-		KittyNotExist,
+		KittyNotExists,
 		NotKittyOwner,
 		TransferToSelf,
 		KittyHasNoPrice,
 		MaxOwnerKitty,
+		KittyPriceNone,
+		NotEnoughMoney,
 	}
 
 	#[pallet::call]
@@ -102,7 +106,7 @@ use sp_io::hashing::blake2_128;
 			
 			ensure!(Self::is_kitty_owner(&kitty_id, &who)?, <Error<T>>::NotKittyOwner);
 
-			let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
+			let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExists)?;
 
 			kitty.set_price(price);
 
@@ -114,11 +118,41 @@ use sp_io::hashing::blake2_128;
 			Ok(())
 		}
 
+		#[transactional]
 		#[pallet::weight(10_000)]
 		pub fn transfer(origin: OriginFor<T>, to: T::AccountId, kitty_id: T::Hash) -> DispatchResult {
 			let from = ensure_signed(origin)?;
 
-			Self::transfer_to(kitty_id, &from, &to)?;
+			// ensure the kitty owner
+			ensure!(Self::is_kitty_owner(&kitty_id, &from)?, <Error<T>>::NotKittyOwner);
+
+			// ensure not transfer to self
+			ensure!(from != to, <Error<T>>::TransferToSelf);
+
+			Self::transfer_to(kitty_id, &to)?;
+
+			Ok(())
+		}
+
+		#[transactional]
+		#[pallet::weight(10_000)]
+		pub fn buy(origin: OriginFor<T>, kitty_id: T::Hash) -> DispatchResult {
+
+			let buyer = ensure_signed(origin)?;
+
+			let kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExists)?;
+
+			let kitty_price = kitty.price().ok_or(<Error<T>>::KittyPriceNone)?;
+
+			// ensure buyer has enough money
+			ensure!(T::Currency::free_balance(&buyer) >= kitty_price, <Error<T>>::NotEnoughMoney);
+
+			let owner = kitty.owner();
+
+			// ensure not transfer to self
+			ensure!(owner != buyer, <Error<T>>::TransferToSelf);
+
+			Self::transfer_to(kitty_id, &buyer)?;
 
 			Ok(())
 		}
@@ -129,18 +163,17 @@ use sp_io::hashing::blake2_128;
 	/// helper 
 	impl <T:Config> Pallet<T> {
 
-		fn generate_dna() -> Vec<u8> {
+		fn generate_dna() -> [u8; 16] {
 
 			let payload = (
 				T::KittyRandomness::random(&b"dna"[..]).0,
 				<frame_system::Pallet<T>>::extrinsic_index().unwrap_or_default(),
 				<frame_system::Pallet<T>>::block_number(),
 			);
-			let encoded = payload.using_encoded(blake2_128);
-			encoded.to_vec()
+			payload.using_encoded(blake2_128)
 		}
 
-		fn generate_gender(dna: &Vec<u8> ) -> Gender {
+		fn generate_gender(dna: &[u8; 16] ) -> Gender {
 			if dna[0] % 2 == 0 {
 				return Gender::MALE;
 			}
@@ -156,29 +189,27 @@ use sp_io::hashing::blake2_128;
 		fn is_kitty_owner(kitty_id: &T::Hash, owner: &T::AccountId) -> Result<bool, Error<T>> {
 			match Self::kitties(kitty_id) {
 				Some(kitty) => Ok(kitty.owner() == *owner),
-				None => Err(Error::KittyNotExist),
+				None => Err(Error::KittyNotExists),
 			}
 		}
 
-		fn transfer_to(kitty_id: T::Hash, from: &T::AccountId, to: &T::AccountId) -> Result<(), Error<T>> { 
-			// ensure the kitty owner
-			ensure!(Self::is_kitty_owner(&kitty_id, from)?, <Error<T>>::NotKittyOwner);
+		fn transfer_to(kitty_id: T::Hash, to: &T::AccountId) -> Result<(), Error<T>> { 
 
-			// ensure not transfer to self
-			ensure!(from != to, <Error<T>>::TransferToSelf);
+			let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExists)?;
+
+			let owner = kitty.owner();
 
 			// remove old kitty owner
-			<KittyOwner<T>>::try_mutate(from, |kitty_vec| {
+			<KittyOwner<T>>::try_mutate(&owner, |kitty_vec| {
 				if let Some(position) = kitty_vec.iter().position(|x| *x == kitty_id.clone()) {
 					kitty_vec.swap_remove(position);
 					return Ok(());
 				}
 				Err(())
-			}).map_err(|_| <Error<T>>::KittyNotExist)?;
+			}).map_err(|_| <Error<T>>::KittyNotExists)?;
 
 			// update kitty owner
 
-			let mut kitty = Self::kitties(&kitty_id).ok_or(<Error<T>>::KittyNotExist)?;
 			kitty.set_price(None);
 			kitty.set_owner(to.clone());
 			<Kitties<T>>::insert(kitty_id.clone(), kitty);
@@ -186,7 +217,7 @@ use sp_io::hashing::blake2_128;
 			// add new kitty owner s
 			<KittyOwner<T>>::try_mutate(&to, |kitty_vec| {
 				kitty_vec.try_push(kitty_id)
-			}).map_err(|_| <Error<T>>::KittyNotExist)?;
+			}).map_err(|_| <Error<T>>::KittyNotExists)?;
 
 			Ok(())
 

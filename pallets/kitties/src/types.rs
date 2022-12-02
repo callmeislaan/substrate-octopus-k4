@@ -1,9 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use core::{clone, fmt::{Display, write}};
-
 use codec::*;
-use frame_support::{inherent::Vec, RuntimeDebug};
+use frame_support::{RuntimeDebug};
 use scale_info::TypeInfo;
 
 use crate::Config;
@@ -11,16 +9,16 @@ use crate::AccountOf;
 use crate::BalanceOf;
 
 
-#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct Kitty<T: Config> {
-    dna: Vec<u8>,
+    dna: [u8; 16],
     owner: AccountOf<T>,
     price: Option<BalanceOf<T>>,
     gender: Gender,
 }
 
-#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
 pub enum Gender {
     MALE,
     FEMALE
@@ -28,7 +26,7 @@ pub enum Gender {
 
 impl <T: Config> Kitty<T> {
 
-    pub fn new(who: T::AccountId, dna: Vec<u8>, gender: Gender) -> Self {
+    pub fn new(who: T::AccountId, dna: [u8; 16], gender: Gender) -> Self {
         Kitty {
             dna,
             owner: who,
@@ -37,7 +35,7 @@ impl <T: Config> Kitty<T> {
         }
     }
 
-    pub fn dna(&self) -> Vec<u8> {
+    pub fn dna(&self) -> [u8; 16] {
         self.dna.clone()
     }
 
