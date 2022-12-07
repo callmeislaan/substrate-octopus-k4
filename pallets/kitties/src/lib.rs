@@ -8,7 +8,7 @@ pub mod types;
 pub mod pallet {
 	use frame_support::{pallet_prelude::{
 		*, ValueQuery, DispatchResult}, 
-		traits::{Randomness, Currency}, 
+		traits::{Randomness, Currency, Time}, 
 		ensure, transactional};
 	use frame_support::sp_runtime::traits::Hash;
 	use frame_system::{pallet_prelude::OriginFor, ensure_signed};
@@ -18,13 +18,14 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
-	#[pallet::without_storage_info]
 	pub struct Pallet<T>(_);
 
 
 	pub(crate) type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 	pub(crate) type AccountOf<T> = <T as frame_system::Config>::AccountId;
+
+	pub(crate) type TimeOf<T> = <T::KittyTime as frame_support::traits::Time>::Moment;
 
 
 	#[pallet::config]
@@ -36,6 +37,8 @@ pub mod pallet {
 		type Currency: Currency<Self::AccountId>;
 
 		type MaxOwnerKitty: Get<u32>;
+
+		type KittyTime: Time;
 
 	}
 
@@ -183,7 +186,8 @@ pub mod pallet {
 		fn mint(who: T::AccountId) -> Kitty<T> {
 			let dna = Self::generate_dna();
 			let gender = Self::generate_gender(&dna);
-			<Kitty<T>>::new(who, dna, gender)
+			let now = T::KittyTime::now();
+			<Kitty<T>>::new(who, dna, gender, now)
 		}
 
 		fn is_kitty_owner(kitty_id: &T::Hash, owner: &T::AccountId) -> Result<bool, Error<T>> {
