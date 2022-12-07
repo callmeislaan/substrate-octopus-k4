@@ -25,7 +25,7 @@ pub mod pallet {
 
 	pub(crate) type AccountOf<T> = <T as frame_system::Config>::AccountId;
 
-	pub(crate) type TimeOf<T> = <T::KittyTime as frame_support::traits::Time>::Moment;
+	pub(crate) type TimeOf<T> = <<T as Config>::KittyTime as frame_support::traits::Time>::Moment;
 
 
 	#[pallet::config]
