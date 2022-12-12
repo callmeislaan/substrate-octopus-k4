@@ -4,6 +4,12 @@ pub use pallet::*;
 
 pub mod types;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::{pallet_prelude::{
@@ -186,7 +192,7 @@ pub mod pallet {
 			}
 			Gender::FEMALE
 		}
-	
+
 		fn mint(who: T::AccountId) -> Kitty<T> {
 			let dna = Self::generate_dna();
 			let gender = Self::generate_gender(&dna);
