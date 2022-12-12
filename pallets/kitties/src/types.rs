@@ -1,5 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use core::fmt::Debug;
+
 use codec::*;
 use frame_support::{RuntimeDebug};
 use scale_info::TypeInfo;
@@ -10,7 +12,7 @@ use crate::BalanceOf;
 use crate::TimeOf;
 
 
-#[derive(Clone, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 pub struct Kitty<T: Config> {
     dna: [u8; 16],
@@ -70,5 +72,17 @@ impl <T: Config> Kitty<T> {
 impl <T> sp_std::fmt::Display for Kitty<T> where T: Config {
     fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
         write!(f, "(dna: {:?}, price: {:?}, gender: {:?}, owner: {:?}, created_date: {:?}", self.dna, self.price, self.gender, self.owner, self.created_date)
+    }
+}
+
+impl <T> Debug for Kitty<T> where T: Config {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Kitty")
+        .field("dna", &self.dna)
+        .field("owner", &self.owner)
+        .field("price", &self.price)
+        .field("gender", &self.gender)
+        .field("create_date", &self.created_date)
+        .finish()
     }
 }

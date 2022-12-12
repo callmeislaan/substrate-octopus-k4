@@ -14,6 +14,8 @@ pub mod pallet {
 	use frame_system::{pallet_prelude::OriginFor, ensure_signed};
 	use sp_io::hashing::blake2_128;
 
+	use frame_support::log;
+
 	use crate::types::*;
 
 	#[pallet::pallet]
@@ -96,7 +98,9 @@ pub mod pallet {
 			kitty_owner.try_push(kitty_id.clone()).map_err(|_| <Error<T>>::MaxOwnerKitty)?;
 
 			<KittyOwner<T>>::insert(who.clone(), kitty_owner.clone());
-			
+		
+
+			log::info!("Create new Kitty: {:?}", kitty);
 
 			Self::deposit_event(Event::KittyCreated(who, kitty_id));
 
