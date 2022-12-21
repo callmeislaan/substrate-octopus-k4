@@ -18,19 +18,18 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::{
 		*, ValueQuery, DispatchResult}, 
 		traits::{Randomness, Currency, Time}, 
-		ensure, transactional};
+		ensure, transactional, BoundedVec};
 	use frame_support::sp_runtime::traits::Hash;
 	use frame_system::{pallet_prelude::OriginFor, ensure_signed};
 	use sp_io::hashing::blake2_128;
 
 	use frame_support::log;
 
-	use crate::types::*;
+	pub use crate::types::*;
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
-
 
 	pub(crate) type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -64,6 +63,45 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn kitty_owner)]
 	pub type KittyOwner<T: Config> = StorageMap<_, Blake2_128Concat, T::AccountId, BoundedVec<T::Hash, T::MaxOwnerKitty>, ValueQuery, >;
+
+
+	// set genesis config for kitty owner
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub admin: Option<T::AccountId>,
+	}
+
+	#[cfg(feature = "std")]
+	impl <T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			GenesisConfig {
+				admin: None,
+			}
+		}
+	}
+
+	#[pallet::genesis_build]
+	impl <T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			if let Some(admin) = self.admin.clone() {
+ 
+				let kitty_1 = Kitty::new(admin.clone(), vec![0; 16].try_into().unwrap(), Gender::MALE, T::KittyTime::now());
+
+				let kitty_id = T::Hashing::hash_of(&kitty_1);
+
+				<Kitties<T>>::insert(kitty_id.clone(), kitty_1);
+				
+
+				let _ok_or_error = <KittyOwner<T>>::try_mutate(&admin, |kitty_vec| {
+					kitty_vec.try_push(kitty_id)
+				}).map_err(|_| <Error<T>>::KittyNotExists);
+			
+				<KittyCounter<T>>::put(1);
+				
+			}
+		} 
+	} 
+	
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
