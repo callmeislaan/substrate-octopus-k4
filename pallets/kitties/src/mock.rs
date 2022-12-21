@@ -20,13 +20,6 @@ frame_support::construct_runtime!(
 		Balance: pallet_balances,
 		Timestamp: pallet_timestamp, 
         PalletKitty: pallet_kitty,
-
-
-        // System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
-		// PalletKitty: pallet_kitty::{Pallet, Call, Storage, Event<T>},
-		// Balance: pallet_balances::{Pallet, Call, Config<T>, Storage, Event<T>},
-		// RandomnessCollectiveFlip: pallet_randomness_collective_flip::{Pallet},
-		// Timestamp: pallet_timestamp::{Pallet, Call, Storage},
 	}
 );
 
@@ -87,7 +80,6 @@ impl pallet_kitty::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	System::set_block_number(1);
 	let mut t = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(1, 100), (2, 100), (3, 100), (4, 100), (5, 100)],
