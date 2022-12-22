@@ -153,7 +153,13 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		template_kitties: TemplateKittiesConfig {
-			admin: Some(get_account_id_from_seed::<sr25519::Public>("Alice")),
+			kitty_owner: vec![
+				(get_account_id_from_seed::<sr25519::Public>("Alice"), [0; 16]),
+				(get_account_id_from_seed::<sr25519::Public>("Alice"), [1; 16]),
+				(get_account_id_from_seed::<sr25519::Public>("Alice"), [2; 16]),
+				(get_account_id_from_seed::<sr25519::Public>("Bob"), [3; 16]),
+				(get_account_id_from_seed::<sr25519::Public>("Bob"), [4; 16]),
+			]
 		} 
 
 	}

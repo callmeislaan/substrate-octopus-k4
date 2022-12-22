@@ -68,14 +68,14 @@ pub mod pallet {
 	// set genesis config for kitty owner
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub admin: Option<T::AccountId>,
+		pub kitty_owner: Vec<(T::AccountId, [u8; 16])>,
 	}
 
 	#[cfg(feature = "std")]
 	impl <T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			GenesisConfig {
-				admin: None,
+				kitty_owner: vec![],
 			}
 		}
 	}
@@ -83,23 +83,25 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl <T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
-			if let Some(admin) = self.admin.clone() {
- 
-				let kitty_1 = Kitty::new(admin.clone(), vec![0; 16].try_into().unwrap(), Gender::MALE, T::KittyTime::now());
 
-				let kitty_id = T::Hashing::hash_of(&kitty_1);
+			for (owner, dna) in &self.kitty_owner {
 
-				<Kitties<T>>::insert(kitty_id.clone(), kitty_1);
-				
+				let gender = <Pallet<T>>::generate_gender(&dna);
 
-				let _ok_or_error = <KittyOwner<T>>::try_mutate(&admin, |kitty_vec| {
+				let kitty = Kitty::new(owner.clone(), *dna, gender, T::KittyTime::now());
+
+				let kitty_id = T::Hashing::hash_of(&kitty);
+
+				<Kitties<T>>::insert(kitty_id.clone(), kitty);
+
+				let _ok_or_error = <KittyOwner<T>>::try_mutate(&owner, |kitty_vec| {
 					kitty_vec.try_push(kitty_id)
 				}).map_err(|_| <Error<T>>::KittyNotExists);
-			
-				<KittyCounter<T>>::put(1);
-				
+
 			}
-		} 
+			let kitty_counter: u32 = self.kitty_owner.len().try_into().unwrap();
+			<KittyCounter<T>>::put(kitty_counter);
+		}
 	} 
 	
 
