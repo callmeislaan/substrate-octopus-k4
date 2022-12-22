@@ -4,6 +4,8 @@ pub use pallet::*;
 
 pub mod types;
 
+pub mod weights;
+
 #[cfg(test)]
 mod mock;
 
@@ -27,6 +29,8 @@ pub mod pallet {
 
 	pub use crate::types::*;
 
+	pub use crate::weights::*;
+
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T>(_);
@@ -49,6 +53,8 @@ pub mod pallet {
 		type MaxOwnerKitty: Get<u32>;
 
 		type KittyTime: Time;
+
+		type WeightInfo: WeightInfo;
 
 	}
 
@@ -127,12 +133,12 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(10_000)]
+		// #[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::create_kitty())]
 		pub fn create_kitty(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let kitty = Self::mint(who.clone());
-
 
 			let current_kitty_count = Self::count();
 
@@ -147,7 +153,6 @@ pub mod pallet {
 			kitty_owner.try_push(kitty_id.clone()).map_err(|_| <Error<T>>::MaxOwnerKitty)?;
 
 			<KittyOwner<T>>::insert(who.clone(), kitty_owner.clone());
-		
 
 			log::info!("Create new Kitty: {:?}", kitty);
 

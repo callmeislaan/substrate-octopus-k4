@@ -281,6 +281,7 @@ impl pallet_kitties::Config for Runtime {
 	type Currency = Balances;
 	type MaxOwnerKitty = ConstU32<3>;
 	type KittyTime = Timestamp;
+	type WeightInfo = pallet_kitties::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -347,6 +348,7 @@ mod benches {
 		[frame_system, SystemBench::<Runtime>]
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
+		[pallet_kitties, TemplateKitties]
 	);
 }
 
