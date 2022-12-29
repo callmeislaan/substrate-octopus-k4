@@ -77,6 +77,7 @@ impl pallet_kitty::Config for Test {
 	type Currency = Balance;
 	type MaxOwnerKitty = ConstU32<3>;
 	type KittyTime = Timestamp;
+	type WeightInfo = pallet_kitty::weights::SubstrateWeight<Test>;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
