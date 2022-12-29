@@ -1,6 +1,8 @@
+use std::vec;
+
 use node_template_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GenesisConfig, GrandpaConfig, Signature, SudoConfig,
-	SystemConfig, WASM_BINARY, TemplateKittiesConfig
+	SystemConfig, WASM_BINARY, TemplateKittiesConfig, AssetsConfig,
 };
 use sc_service::ChainType;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
@@ -169,6 +171,11 @@ fn testnet_genesis(
 				(get_account_id_from_seed::<sr25519::Public>("Bob"), [3; 16]),
 				(get_account_id_from_seed::<sr25519::Public>("Bob"), [4; 16]),
 			]
+		},
+		assets: AssetsConfig {
+			assets: vec![],
+			metadata: vec![],
+			accounts: vec![],
 		} 
 
 	}

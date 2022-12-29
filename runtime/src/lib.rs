@@ -6,12 +6,18 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+pub mod constants;
+
+pub use constants::currency::*;
+
+use frame_support::traits::EnsureOrigin;
+use frame_system::{EnsureSigned, EnsureRoot};
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, OpaqueMetadata, Get};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
@@ -48,6 +54,10 @@ pub use sp_runtime::{Perbill, Permill};
 
 pub use pallet_kitties;
 
+pub use pallet_token;
+
+pub use pallet_assets;
+
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -66,6 +76,8 @@ pub type Index = u32;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
+
+pub type AssetId = u32;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -273,8 +285,6 @@ impl pallet_sudo::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 }
 
-
-
 impl pallet_kitties::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type KittyRandomness = RandomnessCollectiveFlip;
@@ -282,6 +292,37 @@ impl pallet_kitties::Config for Runtime {
 	type MaxOwnerKitty = ConstU32<3>;
 	type KittyTime = Timestamp;
 	type WeightInfo = pallet_kitties::weights::SubstrateWeight<Runtime>;
+}
+
+impl pallet_token::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type AssetHandler = Assets;
+	type AssetId = AssetId;
+}
+
+parameter_types! {
+	pub const AssetDeposit: Balance = 100 * DOLLARS;
+	pub const ApprovalDeposit: Balance = 1 * DOLLARS;
+	pub const StringLimit: u32 = 50;
+	pub const MetadataDepositBase: Balance = 10 * DOLLARS;
+	pub const MetadataDepositPerByte: Balance = 1 * DOLLARS;
+}
+
+impl pallet_assets::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = Balance;
+	type AssetId = AssetId;
+	type Currency = Balances;
+	type ForceOrigin = EnsureRoot<AccountId>;
+	type Freezer = ();
+	type Extra = ();
+	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = ConstU128<DOLLARS>;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+	type StringLimit = StringLimit;
+	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -301,7 +342,9 @@ construct_runtime!(
 		TransactionPayment: pallet_transaction_payment,
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
-		TemplateKitties: pallet_kitties
+		TemplateKitties: pallet_kitties,
+		Assets: pallet_assets,
+		Tokens: pallet_token,
 	}
 );
 
